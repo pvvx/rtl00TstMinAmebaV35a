@@ -1,0 +1,224 @@
+# RTL8710 Flasher v0.0.alfa
+# pvvx 21.09.2016
+-include paths.mk
+#---------------------------
+#FLASHER = stlink-v2-1
+#FLASHER = stlink-v2
+FLASHER ?= Jlink
+#---------------------------
+# Default
+#---------------------------
+# TARGET dirs
+TARGET ?= build
+OBJ_DIR ?= build/obj
+BIN_DIR ?= build/bin
+ELFFILE ?= $(OBJ_DIR)/$(TARGET).axf
+#---------------------------
+# Compilation tools
+CROSS_COMPILE ?= $(GCC_PATH)arm-none-eabi-
+AR ?= $(CROSS_COMPILE)ar
+CC ?= $(CROSS_COMPILE)gcc
+AS ?= $(CROSS_COMPILE)as
+NM ?= $(CROSS_COMPILE)nm
+LD ?= $(CROSS_COMPILE)gcc
+GDB ?= $(CROSS_COMPILE)gdb
+SIZE ?= $(CROSS_COMPILE)size
+OBJCOPY ?= $(CROSS_COMPILE)objcopy
+OBJDUMP ?= $(CROSS_COMPILE)objdump
+
+# Make bunary tools
+TOOLS_PATH ?= component/soc/realtek/8195a/misc/iar_utility/common/tools/
+ifneq ($(shell uname), Linux)
+EXE = .exe
+endif
+PICK = $(TOOLS_PATH)pick$(EXE)
+PADDING = $(TOOLS_PATH)padding$(EXE)
+CHCKSUM = $(TOOLS_PATH)checksum$(EXE)
+
+# openocd tools
+OPENOCD = $(OPENOCD_PATH)openocd
+
+ifeq ($(FLASHER), Jlink)
+# Jlink FLASHER_SPEED ..4000 kHz
+FLASHER_SPEED = 3500
+else 
+ifeq ($(FLASHER),stlink-v2)
+# stlink-v2 FLASHER_SPEED ..1800 kHz
+FLASHER_SPEED = 1800
+else
+# over FLASHER_SPEED ..500 kHz ?
+FLASHER_SPEED = 500
+endif
+endif
+
+#COMPILED_BOOT = 1  # if defined -> extract image1, =1 boot head in elf, =2 boot head ?
+PADDINGSIZE = 44k # defined -> image2 OTA
+
+NMAPFILE = $(OBJ_DIR)/$(TARGET).nmap
+
+#FLASHER_PATH ?= flasher/
+
+RAM1_IMAGE ?= $(BIN_DIR)/ram_1.bin
+RAM1P_IMAGE ?= $(BIN_DIR)/ram_1.p.bin
+
+RAM2_IMAGE = $(BIN_DIR)/ram_2.bin
+RAM2P_IMAGE = $(BIN_DIR)/ram_2.p.bin
+RAM2NS_IMAGE = $(BIN_DIR)/ram_2.ns.bin
+
+RAM3_IMAGE = $(BIN_DIR)/ram_3.bin
+RAM3P_IMAGE = $(BIN_DIR)/ram_3.p.bin
+
+FLASH_IMAGE = $(BIN_DIR)/ram_all.bin
+
+OTA_IMAGE = $(BIN_DIR)/ota.bin
+
+TST_IMAGE = $(BIN_DIR)/ram_2.bin
+LD_ADDRESS = 0x1000B000
+ST_ADDRESS = 0x10006068
+
+.PHONY: copybin1 genbin1 genbin23 flashburn reset test readfullflash
+
+all: $(ELFFILE) $(OTA_IMAGE) $(FLASH_IMAGE)
+
+copybin1:
+	@cp $(BOOTS)/ram_1.r.bin $(BIN_DIR)/ram_1.r.bin
+	@cp $(BOOTS)/ram_1.p.bin $(BIN_DIR)/ram_1.p.bin
+#	@chmod 777 $(OBJ_DIR)/ram_1.r.bin
+	@$(OBJCOPY) --rename-section .data=.loader.data,contents,alloc,load,readonly,data -I binary -O elf32-littlearm -B arm $(BIN_DIR)/ram_1.r.bin $(OBJ_DIR)/ram_1.r.o
+
+genbin1: $(ELFFILE) $(RAM1P_IMAGE) 
+
+genbin23: $(ELFFILE) $(OTA_IMAGE) $(FLASH_IMAGE) _endgenbin  
+
+_endgenbin:
+	@echo "-----------------------------------------------------------"
+	@echo "Image ($(OTA_IMAGE)) size $(shell printf '%d\n' $$(( $$(stat --printf="%s" $(OTA_IMAGE)) )) ) bytes"
+	@echo "Image ($(FLASH_IMAGE)) size $(shell printf '%d\n' $$(( $$(stat --printf="%s" $(FLASH_IMAGE)) )) ) bytes"
+	@echo "==========================================================="  
+
+flashburn: 
+	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -c "init" -c "reset halt" -c "rtl8710_flash_auto_erase 1" -c "rtl8710_flash_auto_verify 1" -c "rtl8710_flash_write $(FLASH_IMAGE) 0" -c "rtl8710_reboot" -c "reset run" -c shutdown
+	
+reset:
+	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -c "init" -c "reset halt" -c "rtl8710_reboot" -c shutdown
+
+test:
+	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -f $(FLASHER_PATH)cortex.ocd -c "init" -c "reset halt" -c "load_image $(TST_IMAGE) $(LD_ADDRESS) bin" -c "cortex_bootstrap $(ST_ADDRESS)" -c "shutdown"
+	
+readfullflash:
+	@rm -f $(BIN_DIR)/fullflash.bin
+	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -f $(FLASHER_PATH)cortex.ocd -c "init" -c "reset halt" -c "rtl8710_flash_read_id" -c "rtl8710_flash_read $(BIN_DIR)/fullflash.bin 0 1048576" -c "reset run" -c "shutdown"
+	if [ -s $(BIN_DIR)/fullflash.bin ]; then echo FullFlash = $(BIN_DIR)/fullflash.bin; fi 
+
+$(NMAPFILE): $(ELFFILE)
+	@echo "==========================================================="
+	@echo "Build names map file"
+	@echo $@
+	@$(NM) $< | sort > $@
+#	@echo "==========================================================="
+
+$(FLASH_IMAGE): $(RAM1P_IMAGE) $(RAM2P_IMAGE) $(RAM3_IMAGE)
+	@echo "==========================================================="
+	@echo "Make Flash image (ram_all.bin)" 
+#	@echo "==========================================================="
+	@mkdir -p $(BIN_DIR)
+	@rm -f $(FLASH_IMAGE) 
+	@if [ -s $(RAM3_IMAGE) ]; then $(PICK) $(RAM3_START_ADDR) $(RAM3_END_ADDR) $(RAM3_IMAGE) $(RAM3P_IMAGE) body+reset_offset; fi 
+	@cat $(RAM1P_IMAGE) > $(FLASH_IMAGE)
+#	@chmod 777 $(FLASH_IMAGE)
+ifdef PADDINGSIZE
+	@$(PADDING) $(PADDINGSIZE) 0xFF $(FLASH_IMAGE)
+endif	
+	@cat $(RAM2P_IMAGE) >> $(FLASH_IMAGE)
+	@if [ -s $(RAM3_IMAGE) ]; then cat $(RAM3P_IMAGE) >> $(FLASH_IMAGE); fi
+#	@echo "Image ($(FLASH_IMAGE)) size $(shell printf '%d\n' $$(( $$(stat --printf="%s" $(FLASH_IMAGE)) )) ) bytes"
+#	@echo "==========================================================="
+#	@rm $(BIN_DIR)/ram_*.p.bin  
+	
+$(OTA_IMAGE): $(RAM2NS_IMAGE) $(RAM3_IMAGE) 
+	@echo "==========================================================="
+	@echo "Make OTA image (ota.bin)"
+	@rm -f $(OTA_IMAGE) 
+	@if [ -s $(RAM3_IMAGE) ]; then $(PICK) $(RAM3_START_ADDR) $(RAM3_END_ADDR) $(RAM3_IMAGE) $(RAM3P_IMAGE) body+reset_offset; fi 
+	@cat $(RAM2NS_IMAGE) > $(OTA_IMAGE)
+	@if [ -s $(RAM3_IMAGE) ]; then cat $(RAM3P_IMAGE) >> $(OTA_IMAGE); fi
+#	@chmod 777 $(OTA_IMAGE)
+	@$(CHCKSUM) $(OTA_IMAGE) || true
+#	@echo "==========================================================="
+
+$(RAM1P_IMAGE): $(ELFFILE) $(NMAPFILE) 
+	@echo "==========================================================="
+	@echo "Create image1p (ram_1.p.bin)"
+#	@echo "==========================================================="
+ifdef COMPILED_BOOT
+	@mkdir -p $(BIN_DIR)
+	@rm -f $(RAM1_IMAGE) $(RAM1P_IMAGE)
+	@$(eval RAM1_START_ADDR := $(shell grep __ram_image1_text $(NMAPFILE) | grep _start__ | awk '{print $$1}'))
+	@$(eval RAM1_END_ADDR := $(shell grep __ram_image1_text $(NMAPFILE) | grep _end__ | awk '{print $$1}'))
+	$(if $(RAM1_START_ADDR),,$(error "Not found __ram_image1_text_start__!"))
+	$(if $(RAM1_END_ADDR),,$(error "Not found __ram_image1_text_end__!"))
+ifneq ($(RAM1_START_ADDR),$(RAM1_END_ADDR))
+ifeq ($(COMPILED_BOOT),2)
+	$(OBJCOPY) -j .ram.start.table -j .ram_image1.text -Obinary $(ELFFILE) $(RAM1_IMAGE)
+	$(PICK) 0x$(RAM1_START_ADDR) 0x$(RAM1_END_ADDR) $(RAM1_IMAGE) $(RAM1P_IMAGE) body+reset_offset
+else
+	@$(OBJCOPY) --change-section-address .boot.head=0x10000ba8 -j .boot.head -j .ram.start.table -j .ram_image1.text -Obinary $(ELFFILE) $(RAM1P_IMAGE)
+endif
+else	
+	@$(error "BOOT-image size = 0")
+endif	
+	$(warning "Flasher: Use external $(RAM1_IMAGE)?")
+#	$(error Flasher: COMPILE_BOOT = No)
+else
+	@if [ -s $(RAM1P_IMAGE) ]; then echo "Use external $(RAM1P_IMAGE)"; fi 
+endif
+
+$(RAM2P_IMAGE): $(ELFFILE) $(NMAPFILE) 
+	@echo "==========================================================="
+	@echo "Create image2p (ram_2.p.bin)"
+#	@echo "==========================================================="
+	@mkdir -p $(BIN_DIR)
+	@rm -f $(RAM2_IMAGE) $(RAM2P_IMAGE)
+	@$(eval RAM2_START_ADDR = $(shell grep __ram_image2_text $(NMAPFILE) | grep _start__ | awk '{print $$1}'))
+	@$(eval RAM2_END_ADDR = $(shell grep __ram_image2_text $(NMAPFILE) | grep _end__ | awk '{print $$1}'))
+	$(if $(RAM2_START_ADDR),,$(error "Not found __ram_image2_text_start__!"))
+	$(if $(RAM2_END_ADDR),,$(error "Not found __ram_image2_text_end__!"))
+	@$(OBJCOPY) -j .image2.start.table -j .ram_image2.text -j .ram_image2.rodata -j .ram.data -Obinary $(ELFFILE) $(RAM2_IMAGE)
+	@$(PICK) 0x$(RAM2_START_ADDR) 0x$(RAM2_END_ADDR) $(RAM2_IMAGE) $(RAM2P_IMAGE) body+reset_offset+sig
+
+$(RAM2NS_IMAGE):$(ELFFILE) $(NMAPFILE) 
+	@echo "==========================================================="
+	@echo "Create image2ns (ram_2.ns.bin)"
+#	@echo "==========================================================="
+	@mkdir -p $(BIN_DIR)
+	@rm -f $(RAM2_IMAGE) $(RAM2NS_IMAGE)
+	@$(eval RAM2_START_ADDR = $(shell grep __ram_image2_text $(NMAPFILE) | grep _start__ | awk '{print $$1}'))
+	@$(eval RAM2_END_ADDR = $(shell grep __ram_image2_text $(NMAPFILE) | grep _end__ | awk '{print $$1}'))
+	$(if $(RAM2_START_ADDR),,$(error "Not found __ram_image2_text_start__!"))
+	$(if $(RAM2_END_ADDR),,$(error "Not found __ram_image2_text_end__!"))
+	@$(OBJCOPY) -j .image2.start.table -j .ram_image2.text -j .ram_image2.rodata -j .ram.data -Obinary $(ELFFILE) $(RAM2_IMAGE)
+	@$(PICK) 0x$(RAM2_START_ADDR) 0x$(RAM2_END_ADDR) $(RAM2_IMAGE) $(RAM2NS_IMAGE) body+reset_offset
+
+$(RAM3_IMAGE): $(ELFFILE) $(NMAPFILE) 
+	@echo "==========================================================="
+	@echo "Create image3 (SDRAM, ram_3.bin)"
+#	@echo "==========================================================="
+	@mkdir -p $(BIN_DIR)
+	@rm -f $(RAM3_IMAGE) $(RAM3P_IMAGE)
+	@$(eval RAM3_START_ADDR = 0x$(shell grep __sdram_data_ $(NMAPFILE) | grep _start__ | awk '{print $$1}'))
+	@$(eval RAM3_END_ADDR = 0x$(shell grep __sdram_data_ $(NMAPFILE) | grep _end__ | awk '{print $$1}'))
+	$(if $(RAM3_START_ADDR),,$(error "Not found __sdram_data_start__!"))
+	$(if $(RAM3_END_ADDR),,$(error "Not found __sdram_data_end__!"))
+ifneq ($(RAM3_START_ADDR),$(RAM3_END_ADDR))
+	@$(OBJCOPY) -j .image3 -j .sdr_text -j .sdr_rodata -j .sdr_data -Obinary $(ELFFILE) $(RAM3_IMAGE)
+else
+	@rm -f $(RAM3_IMAGE) $(RAM3P_IMAGE)
+	@echo "SDRAM not used (size = 0)"
+endif
+	
+$(ELFFILE):
+	$(error Falsher: file $@ not found)
+
+clean:
+	@rm -f $(BIN_DIR)/*.bin
+	

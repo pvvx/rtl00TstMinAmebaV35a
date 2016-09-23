@@ -1,0 +1,20 @@
+#
+# J-LINK GDB SERVER initialization
+#
+target remote localhost:2331
+monitor device Cortex-M3
+monitor speed 3500
+monitor endian little
+monitor reset
+monitor speed 20000
+# Setup GDB FOR FASTER DOWNLOADS
+#set remote memory-write-packet-size 4096
+#set remote memory-write-packet-size fixed
+# Boot RAM
+monitor long 0x40000210 = 0x8011157
+# Load the program executable called "image.elf"
+load build/obj/build.axf
+#continue
+monitor go
+quit
+

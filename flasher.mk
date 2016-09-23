@@ -111,14 +111,17 @@ reset:
 runram:
 	@start $(JLINK_PATH)$(JLINK_GDB) -device Cortex-M3 -if SWD -ir -endian little -speed $(FLASHER_SPEED)
 	@$(GDB) -x flasher/gdb_run_ram.jlink
-	@taskkill.exe /F /IM $(JLINK_GDB)
+	@taskkill.exe -F -IM $(JLINK_GDB)
 
 test:
 	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -f $(FLASHER_PATH)cortex.ocd -c "init" -c "reset halt" -c "load_image $(TST_IMAGE) $(LD_ADDRESS) bin" -c "cortex_bootstrap $(ST_ADDRESS)" -c "shutdown"
 	
 readfullflash:
 	@rm -f $(BIN_DIR)/fullflash.bin
-	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -f $(FLASHER_PATH)cortex.ocd -c "init" -c "reset halt" -c "rtl8710_flash_read_id" -c "rtl8710_flash_read $(BIN_DIR)/fullflash.bin 0 1048576" -c "reset run" -c "shutdown"
+	@start $(JLINK_PATH)$(JLINK_GDB) -device Cortex-M3 -if SWD -ir -endian little -speed $(FLASHER_SPEED)
+	@$(GDB) -x flasher/gdb_rdflash.jlink
+	@taskkill.exe -F -IM $(JLINK_GDB)
+#	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -f $(FLASHER_PATH)cortex.ocd -c "init" -c "reset halt" -c "rtl8710_flash_read_id" -c "rtl8710_flash_read $(BIN_DIR)/fullflash.bin 0 1048576" -c "reset run" -c "shutdown"
 	if [ -s $(BIN_DIR)/fullflash.bin ]; then echo FullFlash = $(BIN_DIR)/fullflash.bin; fi 
 
 $(NMAPFILE): $(ELFFILE)

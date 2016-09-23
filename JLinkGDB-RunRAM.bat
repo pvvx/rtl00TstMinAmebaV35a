@@ -6,7 +6,7 @@ echo Build project...
 mingw32-make.exe -f Makefile all
 @if not exist build\obj\build.axf goto err
 :run
-start JLinkGDBServer.exe -device Cortex-M3 -if SWD -ir -endian little -speed 3500 
+start JLinkGDBServer.exe -device Cortex-M3 -if SWD -ir -endian little -speed 1000 
 arm-none-eabi-gdb.exe -x flasher/gdb_run_ram.jlink
 taskkill /F /IM JLinkGDBServer.exe
 goto end

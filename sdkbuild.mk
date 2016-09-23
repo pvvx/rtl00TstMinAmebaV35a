@@ -37,7 +37,6 @@ build_info:
 	else \
 		echo \#define RTL8195AFW_COMPILE_DOMAIN ; \
 	fi >> .ver
-
 	@echo \#define RTL195AFW_COMPILER \"gcc `$(CC) $(CFLAGS) -dumpversion | tr --delete '\r'`\" >> .ver
 	@mv -f .ver project/realtek_ameba1_va0_example/inc/$@.h
 

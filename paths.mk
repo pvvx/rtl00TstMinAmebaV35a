@@ -6,6 +6,7 @@
 #OPENOCD_PATH = d:/MCU/OpenOCD/bin/# + or set in PATH
 TOOLS_PATH ?= component/soc/realtek/8195a/misc/iar_utility/common/tools/
 FLASHER_PATH ?= flasher/
+JLINK_PATH ?= D:/MCU/SEGGER/JLink_V610a/
 #---------------------------
 # Default
 #---------------------------

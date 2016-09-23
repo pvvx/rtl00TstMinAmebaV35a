@@ -5,6 +5,7 @@
 #FLASHER = stlink-v2-1
 #FLASHER = stlink-v2
 FLASHER ?= Jlink
+JLINK_PATH ?= D:/MCU/SEGGER/JLink_V610a/
 #---------------------------
 # Default
 #---------------------------
@@ -37,6 +38,9 @@ CHCKSUM = $(TOOLS_PATH)checksum$(EXE)
 
 # openocd tools
 OPENOCD = $(OPENOCD_PATH)openocd
+
+JLINK_GDB ?= JLinkGDBServerCL.exe
+JLINK_EXE ?= JLink.exe
 
 ifeq ($(FLASHER), Jlink)
 # Jlink FLASHER_SPEED ..4000 kHz
@@ -96,11 +100,18 @@ _endgenbin:
 	@echo "Image ($(FLASH_IMAGE)) size $(shell printf '%d\n' $$(( $$(stat --printf="%s" $(FLASH_IMAGE)) )) ) bytes"
 	@echo "==========================================================="  
 
-flashburn: 
+flashburn:
 	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -c "init" -c "reset halt" -c "rtl8710_flash_auto_erase 1" -c "rtl8710_flash_auto_verify 1" -c "rtl8710_flash_write $(FLASH_IMAGE) 0" -c "rtl8710_reboot" -c "reset run" -c shutdown
+#	@$(JLINK_PATH)$(JLINK_GDB)
 	
 reset:
-	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -c "init" -c "reset halt" -c "rtl8710_reboot" -c shutdown
+	@$(JLINK_PATH)$(JLINK_EXE) -Device CORTEX-M3 -If SWD -Speed $(FLASHER_SPEED) flasher/RTLreset.JLinkScript
+#	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -c "init" -c "reset halt" -c "rtl8710_reboot" -c shutdown
+
+runram:
+	@start $(JLINK_PATH)$(JLINK_GDB) -device Cortex-M3 -if SWD -ir -endian little -speed $(FLASHER_SPEED)
+	@$(GDB) -x flasher/gdb_run_ram.jlink
+	@taskkill.exe /F /IM $(JLINK_GDB)
 
 test:
 	@$(OPENOCD) -f interface/$(FLASHER).cfg -c "adapter_khz $(FLASHER_SPEED)" -f $(FLASHER_PATH)rtl8710.ocd -f $(FLASHER_PATH)cortex.ocd -c "init" -c "reset halt" -c "load_image $(TST_IMAGE) $(LD_ADDRESS) bin" -c "cortex_bootstrap $(ST_ADDRESS)" -c "shutdown"

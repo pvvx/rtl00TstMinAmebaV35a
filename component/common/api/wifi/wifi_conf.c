@@ -391,7 +391,7 @@ int wifi_connect(
 	u8 wep_hex = 0;
 	u8 wep_pwd[14] = {0};
 
-	if(rtw_join_status & JOIN_SIMPLE_CONFIG || rtw_join_status & JOIN_AIRKISS){
+	if((rtw_join_status & JOIN_SIMPLE_CONFIG) || (rtw_join_status & JOIN_AIRKISS)){
 		return RTW_ERROR;
 	}
 
@@ -556,7 +556,7 @@ int wifi_connect_bssid(
 	xSemaphoreHandle join_semaphore;
 	rtw_result_t result = RTW_SUCCESS;
 
-	if(rtw_join_status & JOIN_SIMPLE_CONFIG || rtw_join_status & JOIN_AIRKISS){
+	if((rtw_join_status & JOIN_SIMPLE_CONFIG) || (rtw_join_status & JOIN_AIRKISS)){
 	    return RTW_ERROR;
 	}
 
@@ -1265,7 +1265,7 @@ int wifi_scan_networks_with_ssid(int (results_handler)(char*buf, int buflen, cha
 	memcpy(scan_buf.buf+sizeof(int), ssid, ssid_len);
 
 	//Scan channel	
-	if(scan_cnt = (wifi_scan(RTW_SCAN_TYPE_ACTIVE, RTW_BSS_TYPE_ANY, &scan_buf)) < 0){
+	if((scan_cnt = (wifi_scan(RTW_SCAN_TYPE_ACTIVE, RTW_BSS_TYPE_ANY, &scan_buf))) < 0){
 		printf("\n\rERROR: wifi scan failed");
 		ret = RTW_ERROR;
 	}else{

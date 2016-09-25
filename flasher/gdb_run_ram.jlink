@@ -23,6 +23,7 @@ monitor long 0x40000210 = 0x8011157
 # Load the program executable called "image.elf"
 load build/obj/build.axf
 #continue
+monitor reset
 monitor go
 quit
 

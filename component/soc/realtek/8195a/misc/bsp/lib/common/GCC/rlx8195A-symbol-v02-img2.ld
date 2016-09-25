@@ -234,6 +234,10 @@ SECTIONS
 	/* Check if data + heap + stack exceeds RAM limit */
 	ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed with stack")
 
+	.boot.head :
+	{
+		KEEP(*(.loader.head*))
+	}
 }
 
 

@@ -94,9 +94,9 @@ p /x $dumpendaddr
 dump binary memory ./build/bin/fullflash.bin $dumpstartaddr $dumpendaddr
 printf "FullFlash saved in ./build/bin/fullflash.bin - OK.\n"
 #------------------------------------------------------------------
-# Reset
-monitor reset
 # Boot Flash
 monitor long 0x40000210 = 0x211157
+# Reset
+monitor reset
 monitor go
 quit

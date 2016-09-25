@@ -55,8 +55,10 @@ FLASHER_SPEED = 500
 endif
 endif
 
-#COMPILED_BOOT = 1  # if defined -> extract image1, =1 boot head in elf, =2 boot head ?
-PADDINGSIZE = 44k # defined -> image2 OTA
+# COMPILED_BOOT if defined -> extract image1, =1 boot head in elf, =2 boot head ?
+#COMPILED_BOOT=1
+# PADDINGSIZE defined -> image2 OTA
+PADDINGSIZE =44k
 
 NMAPFILE = $(OBJ_DIR)/$(TARGET).nmap
 
@@ -163,28 +165,33 @@ $(OTA_IMAGE): $(RAM2NS_IMAGE) $(RAM3_IMAGE)
 $(RAM1P_IMAGE): $(ELFFILE) $(NMAPFILE) 
 	@echo "==========================================================="
 	@echo "Create image1p (ram_1.p.bin)"
-#	@echo "==========================================================="
+#	@echo "===========================================================" .bootloader
 ifdef COMPILED_BOOT
 	@mkdir -p $(BIN_DIR)
 	@rm -f $(RAM1_IMAGE) $(RAM1P_IMAGE)
-	@$(eval RAM1_START_ADDR := $(shell grep __ram_image1_text $(NMAPFILE) | grep _start__ | awk '{print $$1}'))
-	@$(eval RAM1_END_ADDR := $(shell grep __ram_image1_text $(NMAPFILE) | grep _end__ | awk '{print $$1}'))
+ifeq ($(COMPILED_BOOT),1)
+	@$(eval RAM1_START_ADDR := $(shell grep _binary_build_bin_ram_1_r_bin_start $(NMAPFILE) | awk '{print $$1}'))
+	@$(eval RAM1_END_ADDR := $(shell grep _binary_build_bin_ram_1_r_bin_end $(NMAPFILE) | awk '{print $$1}'))
+else
+	@$(eval RAM1_START_ADDR := $(shell grep __ram_image1_text_start__ $(NMAPFILE) | awk '{print $$1}'))
+	@$(eval RAM1_END_ADDR := $(shell grep __ram_image1_text_end__ $(NMAPFILE) | awk '{print $$1}'))
+endif
 	$(if $(RAM1_START_ADDR),,$(error "Not found __ram_image1_text_start__!"))
 	$(if $(RAM1_END_ADDR),,$(error "Not found __ram_image1_text_end__!"))
-ifneq ($(RAM1_START_ADDR),$(RAM1_END_ADDR))
-ifeq ($(COMPILED_BOOT),2)
+ifeq ($(RAM1_START_ADDR),$(RAM1_END_ADDR))
+ifneq ($(COMPILED_BOOT),1)
 	$(OBJCOPY) -j .ram.start.table -j .ram_image1.text -Obinary $(ELFFILE) $(RAM1_IMAGE)
 	$(PICK) 0x$(RAM1_START_ADDR) 0x$(RAM1_END_ADDR) $(RAM1_IMAGE) $(RAM1P_IMAGE) body+reset_offset
 else
-	@$(OBJCOPY) --change-section-address .boot.head=0x10000ba8 -j .boot.head -j .ram.start.table -j .ram_image1.text -Obinary $(ELFFILE) $(RAM1P_IMAGE)
+	$(OBJCOPY) --change-section-address .boot.head=0x10000ba8 -j .boot.head -j .bootloader -Obinary $(ELFFILE) $(RAM1P_IMAGE)
 endif
-else	
-	@$(error "BOOT-image size = 0")
-endif	
 	$(warning "Flasher: Use external $(RAM1_IMAGE)?")
+else 
+	$(error "BOOT-image size = 0")
 #	$(error Flasher: COMPILE_BOOT = No)
+endif	
 else
-	@if [ -s $(RAM1P_IMAGE) ]; then echo "Use external $(RAM1P_IMAGE)"; fi 
+	@if [ -s $(RAM1P_IMAGE) ]; then echo "Use external $(RAM1P_IMAGE)!"; fi 
 endif
 
 $(RAM2P_IMAGE): $(ELFFILE) $(NMAPFILE) 

@@ -3,7 +3,7 @@ all: ram_all
 .PHONY: ram_all
 ram_all: 
 	@$(MAKE) -f sdkbuild.mk
-	@$(MAKE) -f flasher.mk genbin23 
+	@$(MAKE) -f flasher.mk genbin1 genbin23 
 	
 .PHONY: clean  clean_all
 clean:

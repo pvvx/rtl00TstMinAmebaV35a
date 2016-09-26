@@ -112,10 +112,15 @@
   EndianMode = 0
   ChipName = "Cortex-M3"
 [FLASH]
+  aRangeSel[1] = 0-18
+  BankSelMode = 1
   BaseAddr = 0x98000000
+  CheckId = 0
   CustomRAMCode = "D:\MCU\SEGGER\JLink_V610a\Samples\JFlash\ProjectFiles\Atmel\AT91SAM9261_DataFlash_SPI0\RAMCodeV2_AT91SAM9261_DataFlash_SPI0_LE.mot"
+  DeviceName = "Am29F800BB"
   NumBanks = 1
-  UseCustomRAMCode = 1
+  OrgNumBits = 16
+  OrgNumChips = 1
 [PRODUCTION]
   AutoBlankCheck = 1
   AutoDisconnect = 0
